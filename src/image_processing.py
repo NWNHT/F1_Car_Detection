@@ -13,6 +13,21 @@ def model_application(model, device, loader: DataLoader,
                       skip_masks: bool=False,
                       clear_mask_dest: bool=False, clear_image_dest: bool=False,
                       clean_up_mask_dest: bool=False, clean_up_image_dest: bool=False):
+    """Apply the model to a given sequence or group of images.
+
+    Args:
+        model (torch.nn.Module?): Model to apply.
+        device (str): Selection of cpu/gpu device to run model on
+        loader (DataLoader): Dataset loader.
+        image_src (str): Filepath of the source images.
+        image_dest (str): Filepath of location for completed images.
+        mask_dest (str): Filepath of location for completed masks.
+        skip_masks (bool, optional): Option to skip masks if they have already been created. Defaults to False.
+        clear_mask_dest (bool, optional): Delete all pre-existing masks in specified directory. Defaults to False.
+        clear_image_dest (bool, optional): Delete all pre-existing images in specified directory. Defaults to False.
+        clean_up_mask_dest (bool, optional): Delete the completed masks in specified directory. Defaults to False.
+        clean_up_image_dest (bool, optional): Delete the completed images in specified directory. Defaults to False.
+    """
 
     # Generate the masks
     if not skip_masks:
@@ -42,6 +57,7 @@ def model_application(model, device, loader: DataLoader,
 def generate_masks(model, device, loader: DataLoader,
                    mask_dest: str,
                    clear_dest: bool=False):
+    """Use given model to generate segmentation predictions and save the results to the specified directory for later processing """
     
     # Create mask destination if dne
     if not path.isdir(mask_dest):
@@ -70,7 +86,10 @@ def generate_masks(model, device, loader: DataLoader,
 def generate_output_images(mask_dest: str,
                            image_src: str,
                            image_dest: str,
-                           clear_dest: bool=False):
+                           clear_dest: bool=False,
+                           row_buffer: int=50,
+                           col_buffer: int=50):
+    """Generate contours/outlines of the predictions and a bounding box on all predictions """
 
     # Create image destination if dne
     if not path.isdir(image_dest):
@@ -80,19 +99,25 @@ def generate_output_images(mask_dest: str,
         for f in [f for f in listdir(image_dest) if f.endswith('.jpg')]:
             remove(image_dest + f)
 
+    x = y = w = h = None
     # For each mask/image in the save location:
-    for img_name in tqdm([f for f in listdir(image_src) if f.endswith('.jpg')]):
+    for img_name in tqdm(sorted([f for f in listdir(image_src) if f.endswith('.jpg')])):
         
-        # Grab an image and mask
+        # Grab an image and prediction mask
         img = cv2.imread(image_src + img_name)
         mask = np.uint8(cv2.imread(mask_dest + img_name[:-4] + '.png')[:, :, 0])
+
+        # Ignore first frame as there is no existing prediction on the location.  
+        # - Then only consider predicted pixels within a certain area around the previous region.
+        # - If the first frame has erroneous areas then they will be bounded but will be corrected once there is a frame with only the region of interest
+        if x is not None:
+            mask_mask = np.zeros_like(mask)
+            mask_mask[max(0, y - col_buffer):min(mask.shape[0], y + h + col_buffer), max(0, x - row_buffer):min(mask.shape[1], x + w + row_buffer)] = 1
+            mask = np.multiply(mask, mask_mask)
         
-        # Find contour/bounding box of mask
-        # mask_thres = cv2.threshold(mask, 0.5, 1, type=cv2.THRESH_BINARY)
+        # Find contour/bounding box of prediction mask
         contours = cv2.findContours(mask, mode=cv2.RETR_LIST, method=cv2.CHAIN_APPROX_SIMPLE)[0] # List of contours(lists of points)
         rect = cv2.boundingRect(mask) 
-        # if the widths and location are reasonable, then use them
-        # if 'x' not in vars() or (abs(rect[2] - w) < 200 and abs(rect[3] - h) < 200 and abs(rect[0] - x) < 200 and abs(rect[1] - y) < 200):
         x, y, w, h = rect
 
         # Draw the contour and bounding box on the image
@@ -101,4 +126,3 @@ def generate_output_images(mask_dest: str,
         
         # Save the image to a new location
         cv2.imwrite(image_dest + img_name, img)
-

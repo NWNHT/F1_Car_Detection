@@ -7,7 +7,7 @@ from torchvision.transforms import ToTensor
 
 from typing import Optional
 
-# --- Train and Test loops using torch datasets and dataloaders
+# --- Train and Test loops using torch datasets and dataloaders ---
 
 def train_torch(model, device, optim, lossfn, loader: DataLoader):
     """Function to train given model for a single epoch with the given dataloader."""
