@@ -6,5 +6,5 @@ F1 car detection using onboard camera footage.
 
 Result on unseen examples
 
-![Examples](data/images/example.png)
+![Examples](docs/images/example.png)
 
