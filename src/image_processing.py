@@ -121,7 +121,7 @@ def generate_output_images(mask_dest: str,
         x, y, w, h = rect
 
         # Draw the contour and bounding box on the image
-        img = cv2.drawContours(img, contours, contourIdx=-1, color=(255, 0, 0), thickness=2)
+        img = cv2.drawContours(img, contours, contourIdx=-1, color=(118, 226, 22), thickness=3)
         img = cv2.rectangle(img, (x, y), (x + w, y + h), color=(0, 0, 255), thickness=3)
         
         # Save the image to a new location
