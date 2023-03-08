@@ -14,6 +14,7 @@ def train_torch(model, device, optim, lossfn, loader: DataLoader):
 
     # Loop through the dataloader and train
     lossi = []
+    dice_i = []
     model.train()
     for i, (X, y) in enumerate(loader):
         images = X.to(device)
@@ -28,7 +29,15 @@ def train_torch(model, device, optim, lossfn, loader: DataLoader):
         loss.backward()
         optim.step()
         lossi.append(loss.item())
+
+        pred = np.argmax(pred.detach().cpu().numpy(), axis=1).astype(np.float32)
+        masks = masks.detach().cpu().numpy().astype(np.float32)
+
+        dice_i.extend(calc_dice(pred, masks))
+
         print(f"Batch {i}: {loss.item()}")
+
+    print(f"Dice\nMin: {min(dice_i)}, Max: {max(dice_i)}, Stddev: {np.std(dice_i)}, Mean: {np.mean(dice_i)}")
 
     model.eval()
     return lossi
@@ -37,6 +46,7 @@ def train_torch(model, device, optim, lossfn, loader: DataLoader):
 def model_test_torch(model, device, lossfn, loader: DataLoader):
     """Test the model on the given dataloader and loss function.  """
 
+    dice_i = []
     model.eval()
     with torch.no_grad():
         # Get batch
@@ -51,7 +61,23 @@ def model_test_torch(model, device, lossfn, loader: DataLoader):
             # Calculate the loss, propagate backwards, update parameters
             loss = lossfn(pred, masks.type(torch.long))
 
-    return loss.item()
+            pred = np.argmax(pred.detach().cpu().numpy(), axis=1).astype(np.float32)
+            masks = masks.detach().cpu().numpy().astype(np.float32)
+
+            dice_i.extend(calc_dice(pred, masks))
+    
+    print(f"Dice\nMin: {min(dice_i)}, Max: {max(dice_i)}, Stddev: {np.std(dice_i)}, Mean: {np.mean(dice_i)}")
+    print(f"Loss: {loss.item()}")
+
+    return loss.item(), min(dice_i), max(dice_i), np.std(dice_i), np.mean(dice_i)
+
+def calc_dice(pred, masks):
+
+    intersection = np.logical_and(pred, masks)
+    excl = np.logical_xor(pred, masks)
+
+    dice = (2 * np.sum(intersection, axis=(1, 2))) / (2 * np.sum(intersection, axis=(1, 2)) + np.sum(excl, axis=(1, 2)))
+    return dice.tolist()
 
 
 class ImageSet(Dataset):

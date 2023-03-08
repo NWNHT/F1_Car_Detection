@@ -11,6 +11,7 @@ from os import listdir, remove, rmdir, mkdir, path
 def model_application(model, device, loader: DataLoader, 
                       image_src: str, image_dest: str, mask_dest: str, 
                       skip_masks: bool=False,
+                      orig_dim: tuple=(1920, 1080),
                       clear_mask_dest: bool=False, clear_image_dest: bool=False,
                       clean_up_mask_dest: bool=False, clean_up_image_dest: bool=False):
     """Apply the model to a given sequence or group of images.
@@ -23,6 +24,7 @@ def model_application(model, device, loader: DataLoader,
         image_dest (str): Filepath of location for completed images.
         mask_dest (str): Filepath of location for completed masks.
         skip_masks (bool, optional): Option to skip masks if they have already been created. Defaults to False.
+        orig_dim (tuple, optional): Original dimensions of the image, used to resize masks to original size.
         clear_mask_dest (bool, optional): Delete all pre-existing masks in specified directory. Defaults to False.
         clear_image_dest (bool, optional): Delete all pre-existing images in specified directory. Defaults to False.
         clean_up_mask_dest (bool, optional): Delete the completed masks in specified directory. Defaults to False.
@@ -35,6 +37,7 @@ def model_application(model, device, loader: DataLoader,
                        device=device,
                        loader=loader,
                        mask_dest=mask_dest,
+                       orig_dim=orig_dim,
                        clear_dest=clear_mask_dest)
 
     # Generate the output images
@@ -56,6 +59,7 @@ def model_application(model, device, loader: DataLoader,
 
 def generate_masks(model, device, loader: DataLoader,
                    mask_dest: str,
+                   orig_dim: tuple,
                    clear_dest: bool=False):
     """Use given model to generate segmentation predictions and save the results to the specified directory for later processing """
     
@@ -77,7 +81,10 @@ def generate_masks(model, device, loader: DataLoader,
         # Process the predictions to get binary masks, this is an abuse of the fact that there are only two classes
         pred_masks = torch.argmax(pred, dim=1).detach().to('cpu').numpy()
         pred_masks[pred_masks > 0] = 255
-        
+
+        # Resize the masks to the original image size
+        pred_masks = np.dstack([cv2.resize(pred_masks[i].astype(np.float32), dsize=orig_dim) for i in range(pred_masks.shape[0])]).transpose((2, 0, 1))
+
         # Save the binary masks to disk
         for file_name, mask in zip(fn, pred_masks):
             cv2.imwrite(mask_dest + file_name[:-4] + '.png', mask)
